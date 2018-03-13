@@ -65,11 +65,18 @@ func RunContainer(ctx context.Context, cfg sampctltypes.Runtime, cacheDir string
 		Mounts: mounts,
 		PortBindings: nat.PortMap{
 			nat.Port(port): []nat.PortBinding{
-				{HostIP: "0.0.0.0", HostPort: port},
+				{HostIP: "0.0.0.0", HostPort: port + "/tcp"},
+				{HostIP: "0.0.0.0", HostPort: port + "/udp"},
 			},
 		},
 		SecurityOpt: []string{"seccomp=unconfined"},
 		Privileged:  true,
+	}
+
+	if cfg.WebConfig != nil {
+		hostConfig.PortBindings[nat.Port(cfg.WebConfig.Port)] = []nat.PortBinding{
+			{HostIP: cfg.WebConfig.IP, HostPort: cfg.WebConfig.Port + "/tcp"},
+		}
 	}
 
 	netConfig := &network.NetworkingConfig{
@@ -171,6 +178,11 @@ func RunContainer(ctx context.Context, cfg sampctltypes.Runtime, cacheDir string
 		if errClose := reader.Close(); errClose != nil {
 			panic(errClose)
 		}
+	}()
+
+	go func() {
+		<-finished
+		reader.Close()
 	}()
 
 	scanner := bufio.NewScanner(reader)

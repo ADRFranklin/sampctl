@@ -37,6 +37,10 @@ func Run(ctx context.Context, cfg types.Runtime, cacheDir string, passArgs, reco
 		return RunContainer(ctx, cfg, cacheDir, passArgs, output, input)
 	}
 
+	if cfg.WebConfig != nil {
+		return RunWithHTTP(ctx, cfg, cacheDir, recover, output, input)
+	}
+
 	binary := "./" + getServerBinary(cfg.Platform)
 	fullPath := filepath.Join(cfg.WorkingDir, binary)
 	print.Verb("starting", binary, "in", cfg.WorkingDir)
