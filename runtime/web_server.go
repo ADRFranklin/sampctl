@@ -2,11 +2,13 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
 
+	"github.com/Southclaws/go-samp-query"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
@@ -54,5 +56,13 @@ func initHTTP(cfg types.Runtime) (err error) {
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`hello world`))
+	server, err := sampquery.GetServerInfo(context.Background(), "localhost:7777", false)
+	if err != nil {
+		return
+	}
+
+	payload, _ := json.Marshal(server)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(payload)
 }
