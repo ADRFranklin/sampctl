@@ -6,12 +6,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-github/github"
+	"github.com/jinzhu/configor"
+	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
+	"github.com/Southclaws/sampctl/print"
 	"github.com/Southclaws/sampctl/util"
 	"github.com/Southclaws/sampctl/versioning"
 )
@@ -35,23 +40,15 @@ type Package struct {
 	// created and is developing. The opposite of this would be packages that exist in the
 	// `dependencies` directory that have been downloaded as a result of an Ensure.
 	Parent bool `json:"-" yaml:"-"`
-	// Local path, this indicates the Package object represents a local copy which is a directory
+	// LocalPath indicates the Package object represents a local copy which is a directory
 	// containing a `samp.json`/`samp.yaml` file and a set of Pawn source code files.
 	// If this field is not set, then the Package is just an in-memory pointer to a remote package.
-	Local string `json:"-" yaml:"-"`
+	LocalPath string `json:"-" yaml:"-"`
 	// The vendor directory - for simple packages with no sub-dependencies, this is simply
 	// `<local>/dependencies` but for nested dependencies, this needs to be set.
 	Vendor string `json:"-" yaml:"-"`
 	// format stores the original format of the package definition file, either `json` or `yaml`
 	Format string `json:"-" yaml:"-"`
-	// allDependencies stores a list of all dependency meta from this package and sub packages
-	// this field is only used if `parent` is true.
-	AllDependencies []versioning.DependencyMeta `json:"-" yaml:"-"`
-	// allPlugins stores a list of all plugin dependency meta from this package and sub packages
-	// this field is only used if `parent` is true.
-	AllPlugins []versioning.DependencyMeta `json:"-" yaml:"-"`
-	// AllIncludePaths stores a list of all additional include paths to pass to the compiler.
-	AllIncludePaths []string `json:"include_paths"`
 
 	// Inferred metadata, not always explicitly set via JSON/YAML but inferred from the dependency path
 	versioning.DependencyMeta
@@ -65,8 +62,11 @@ type Package struct {
 	Output       string                        `json:"output,omitempty"`                                             // output amx file
 	Dependencies []versioning.DependencyString `json:"dependencies,omitempty" yaml:"dependencies,omitempty"`         // list of packages that the package depends on
 	Development  []versioning.DependencyString `json:"dev_dependencies,omitempty" yaml:"dev_dependencies,omitempty"` // list of packages that only the package builds depend on
-	Builds       []BuildConfig                 `json:"builds,omitempty" yaml:"builds,omitempty"`                     // list of build configurations
-	Runtime      *Runtime                      `json:"runtime,omitempty" yaml:"runtime,omitempty"`                   // runtime configuration for executing the package code
+	Local        bool                          `json:"local,omitempty" yaml:"local,omitempty"`                       // run package in local dir instead of in a temporary runtime
+	Build        *BuildConfig                  `json:"build,omitempty" yaml:"build,omitempty"`                       // build configuration
+	Builds       []*BuildConfig                `json:"builds,omitempty" yaml:"builds,omitempty"`                     // multiple build configurations
+	Runtime      *Runtime                      `json:"runtime,omitempty" yaml:"runtime,omitempty"`                   // runtime configuration
+	Runtimes     []*Runtime                    `json:"runtimes,omitempty" yaml:"runtimes,omitempty"`                 // multiple runtime configurations
 	IncludePath  string                        `json:"include_path,omitempty" yaml:"include_path,omitempty"`         // include path within the repository, so users don't need to specify the path explicitly
 	Resources    []Resource                    `json:"resources,omitempty" yaml:"resources,omitempty"`               // list of additional resources associated with the package
 }
@@ -100,57 +100,54 @@ func PackageFromDep(depString versioning.DependencyString) (pkg Package, err err
 
 // PackageFromDir attempts to parse a pawn.json or pawn.yaml file from a directory
 func PackageFromDir(dir string) (pkg Package, err error) {
-	jsonFile := filepath.Join(dir, "pawn.json")
-	if util.Exists(jsonFile) {
-		return PackageFromJSON(jsonFile)
-	}
-
-	yamlFile := filepath.Join(dir, "pawn.yaml")
-	if util.Exists(yamlFile) {
-		return PackageFromYAML(yamlFile)
-	}
-
-	err = errors.New("no pawn.json/pawn.yaml present")
-
-	return
-}
-
-// PackageFromJSON creates a config from a JSON file
-func PackageFromJSON(file string) (pkg Package, err error) {
-	var contents []byte
-	contents, err = ioutil.ReadFile(file)
+	err = godotenv.Load(filepath.Join(dir, ".env"))
 	if err != nil {
-		err = errors.Wrap(err, "failed to read pawn.json")
+		print.Verb("could not load .env:", err)
+		err = nil
+	}
+
+	packageDefinitions := []string{
+		filepath.Join(dir, "pawn.json"),
+		filepath.Join(dir, "pawn.yaml"),
+		filepath.Join(dir, "pawn.toml"),
+	}
+	packageDefinition := ""
+	packageDefinitionFormat := ""
+	for _, configFile := range packageDefinitions {
+		if util.Exists(configFile) {
+			packageDefinition = configFile
+			packageDefinitionFormat = filepath.Ext(configFile)[1:]
+			break
+		}
+	}
+
+	if packageDefinition == "" {
+		err = errors.New("no package definition file (pawn.{json|yaml|toml})")
 		return
 	}
 
-	err = json.Unmarshal(contents, &pkg)
+	cnfgr := configor.New(&configor.Config{
+		Environment:          "development",
+		ENVPrefix:            "SAMP",
+		Debug:                os.Getenv("DEBUG") != "",
+		Verbose:              os.Getenv("DEBUG") != "",
+		ErrorOnUnmatchedKeys: true,
+	})
+
+	print.Verb("loading package definition", packageDefinitionFormat, "file", packageDefinition)
+
+	// Note: configor returns weird errors on success for some dumb reason, awaiting fix upstream.
+	err = cnfgr.Load(&pkg, packageDefinition)
 	if err != nil {
-		err = errors.Wrap(err, "failed to unmarshal pawn.json")
-		return
+		if strings.Contains(err.Error(), "cannot unmarshal !!seq into string") {
+			err = nil
+		} else {
+			err = errors.Wrapf(err, "failed to load configuration from '%s'", packageDefinition)
+			return
+		}
 	}
 
-	pkg.Format = "json"
-
-	return
-}
-
-// PackageFromYAML creates a config from a YAML file
-func PackageFromYAML(file string) (pkg Package, err error) {
-	var contents []byte
-	contents, err = ioutil.ReadFile(file)
-	if err != nil {
-		err = errors.Wrap(err, "failed to read pawn.yaml")
-		return
-	}
-
-	err = yaml.Unmarshal(contents, &pkg)
-	if err != nil {
-		err = errors.Wrap(err, "failed to unmarshal pawn.yaml")
-		return
-	}
-
-	pkg.Format = "yaml"
+	pkg.Format = packageDefinitionFormat
 
 	return
 }
@@ -165,7 +162,7 @@ func (pkg Package) WriteDefinition() (err error) {
 		if err != nil {
 			return errors.Wrap(err, "failed to encode package metadata")
 		}
-		err = ioutil.WriteFile(filepath.Join(pkg.Local, "pawn.json"), contents, 0755)
+		err = ioutil.WriteFile(filepath.Join(pkg.LocalPath, "pawn.json"), contents, 0755)
 		if err != nil {
 			return errors.Wrap(err, "failed to write pawn.json")
 		}
@@ -175,10 +172,13 @@ func (pkg Package) WriteDefinition() (err error) {
 		if err != nil {
 			return errors.Wrap(err, "failed to encode package metadata")
 		}
-		err = ioutil.WriteFile(filepath.Join(pkg.Local, "pawn.yaml"), contents, 0755)
+		err = ioutil.WriteFile(filepath.Join(pkg.LocalPath, "pawn.yaml"), contents, 0755)
 		if err != nil {
 			return errors.Wrap(err, "failed to write pawn.yaml")
 		}
+	case "toml":
+		// TODO: Toml writer
+		err = errors.New("toml output not supported")
 	default:
 		err = errors.New("package has no format associated with it")
 	}
@@ -186,13 +186,20 @@ func (pkg Package) WriteDefinition() (err error) {
 	return
 }
 
+// GetCachedPackage returns a package using the cached copy, if it exists
+func GetCachedPackage(meta versioning.DependencyMeta, cacheDir string) (pkg Package, err error) {
+	path := meta.CachePath(cacheDir)
+	return PackageFromDir(path)
+}
+
 // GetRemotePackage attempts to get a package definition for the given dependency meta.
-// It first checks the repository itself, if that fails it falls back to using the sampctl central
-// plugin metadata repository
+// It first checks the the sampctl central repository, if that fails it falls back to using the
+// repository for the package itself. This means upstream changes to plugins can be first staged in
+// the official central repository before being pulled to the package specific repository.
 func GetRemotePackage(ctx context.Context, client *github.Client, meta versioning.DependencyMeta) (pkg Package, err error) {
-	pkg, err = PackageFromRepo(ctx, client, meta)
+	pkg, err = PackageFromOfficialRepo(ctx, client, meta)
 	if err != nil {
-		return PackageFromOfficialRepo(ctx, client, meta)
+		return PackageFromRepo(ctx, client, meta)
 	}
 	return
 }
@@ -248,12 +255,20 @@ func PackageFromOfficialRepo(ctx context.Context, client *github.Client, meta ve
 	}
 
 	if resp.StatusCode != 200 {
-		err = errors.Wrapf(err, "plugin '%s' does not exist in official repo", meta)
+		err = errors.Errorf("plugin '%s' does not exist in official repo", meta)
 		return
 	}
 
-	dec := json.NewDecoder(resp.Body)
-	err = dec.Decode(&pkg)
+	payload, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		err = errors.Wrapf(err, "failed to read response for plugin package '%s'", meta)
+		return
+	}
+	err = json.Unmarshal(payload, &pkg)
+	if err != nil {
+		err = errors.Wrapf(err, "failed to decode plugin package '%s'", meta)
+		return
+	}
 
 	return
 }

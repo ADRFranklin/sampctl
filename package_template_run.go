@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
@@ -35,6 +35,13 @@ func packageTemplateRun(c *cli.Context) (err error) {
 		print.SetVerbose()
 	}
 
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package template run",
+			UserId: config.UserID,
+		})
+	}
+
 	version := c.String("version")
 	mode := c.String("mode")
 
@@ -59,7 +66,7 @@ func packageTemplateRun(c *cli.Context) (err error) {
 		return errors.Errorf("no such file or directory: %s", filename)
 	}
 
-	pkg, err := rook.PackageFromDir(true, templatePath, runtime.GOOS, "")
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, templatePath, platform(c), cacheDir, "")
 	if err != nil {
 		return errors.Wrap(err, "template package is invalid")
 	}
@@ -69,7 +76,7 @@ func packageTemplateRun(c *cli.Context) (err error) {
 		return errors.Wrap(err, "failed to copy target script to template package directory")
 	}
 
-	problems, result, err := rook.Build(context.Background(), gh, gitAuth, &pkg, "", cacheDir, runtime.GOOS, false, false, true, "")
+	problems, result, err := pcx.Build(context.Background(), "", false, false, true, "")
 	if err != nil {
 		return
 	}
@@ -83,31 +90,27 @@ func packageTemplateRun(c *cli.Context) (err error) {
 		result.Estimate,
 		result.Total))
 
+	// override the version with the one passed by --version
+	pcx.Package.Runtime.Version = version
+
 	if !problems.IsValid() {
 		return errors.New("cannot run with build errors")
 	}
-	runner := rook.Runner{
-		Pkg: pkg,
-		Config: types.Runtime{
-			Platform:   runtime.GOOS,
-			AppVersion: c.App.Version,
-			Version:    version,
-		},
-		GitHub:      gh,
-		Auth:        gitAuth,
-		CacheDir:    cacheDir,
-		Build:       "",
-		ForceBuild:  false,
-		ForceEnsure: false,
-		NoCache:     false,
-		BuildFile:   "",
-		Relative:    false,
-	}
+	pcx.Runtime = ""
+	pcx.Container = false
+	pcx.AppVersion = c.App.Version
+	pcx.CacheDir = cacheDir
+	pcx.BuildName = ""
+	pcx.ForceBuild = false
+	pcx.ForceEnsure = false
+	pcx.NoCache = false
+	pcx.BuildFile = ""
+	pcx.Relative = false
 
-	pkg.Runtime = new(types.Runtime)
-	pkg.Runtime.Mode = types.RunMode(mode)
+	pcx.Package.Runtime = new(types.Runtime)
+	pcx.Package.Runtime.Mode = types.RunMode(mode)
 
-	err = runner.Run(context.Background(), os.Stdout, os.Stdin)
+	err = pcx.Run(context.Background(), os.Stdout, os.Stdin)
 	if err != nil {
 		return
 	}

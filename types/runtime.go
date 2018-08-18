@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -25,6 +26,7 @@ type Runtime struct {
 	Format     string                      `ignore:"1" json:"-" yaml:"-"` // format stores the original format of the package definition file, either `json` or `yaml`
 
 	// Only used to configure sampctl, not used in server.cfg generation
+	Name      string     `ignore:"1" json:"name,omitempty"       yaml:"name,omitempty"`       // configuration name
 	Version   string     `ignore:"1" json:"version,omitempty"    yaml:"version,omitempty"`    // runtime version
 	Mode      RunMode    `ignore:"1" json:"mode,omitempty"       yaml:"mode,omitempty"`       // the runtime mode
 	WebConfig *WebConfig `ignore:"1" json:"web_server,omitempty" yaml:"web_server,omitempty"` // web server config
@@ -33,13 +35,13 @@ type Runtime struct {
 	Echo *string `default:"-" required:"0" json:"echo,omitempty" yaml:"echo,omitempty"`
 
 	// Core properties
-	Gamemodes     []string `cfg:"gamemode" numbered:"1"          json:"gamemodes"               yaml:"gamemodes"`               //
+	Gamemodes     []string `cfg:"gamemode" numbered:"1"          json:"gamemodes,omitempty"     yaml:"gamemodes,omitempty"`     //
 	Filterscripts []string `                        required:"0" json:"filterscripts,omitempty" yaml:"filterscripts,omitempty"` //
 	Plugins       []Plugin `                        required:"0" json:"plugins,omitempty"       yaml:"plugins,omitempty"`       //
 	RCONPassword  *string  `                        required:"1" json:"rcon_password,omitempty" yaml:"rcon_password,omitempty"` // changeme
-	Port          *int     `default:"8192"          required:"0" json:"port"                    yaml:"port"`                    // 8192
+	Port          *int     `default:"8192"          required:"0" json:"port,omitempty"          yaml:"port,omitempty"`          // 8192
 	Hostname      *string  `default:"SA-MP Server"  required:"0" json:"hostname,omitempty"      yaml:"hostname,omitempty"`      // SA-MP Server
-	MaxPlayers    *int     `default:"50"            required:"0" json:"maxplayers"              yaml:"maxplayers"`              // 50
+	MaxPlayers    *int     `default:"50"            required:"0" json:"maxplayers,omitempty"    yaml:"maxplayers,omitempty"`    // 50
 	Language      *string  `default:"-"             required:"0" json:"language,omitempty"      yaml:"language,omitempty"`      //
 	Mapname       *string  `default:"San Andreas"   required:"0" json:"mapname,omitempty"       yaml:"mapname,omitempty"`       // San Andreas
 	Weburl        *string  `default:"www.sa-mp.com" required:"0" json:"weburl,omitempty"        yaml:"weburl,omitempty"`        // www.sa-mp.com
@@ -80,7 +82,7 @@ type Runtime struct {
 	Output            *bool    `default:"1"             required:"0" json:"output,omitempty"            yaml:"output,omitempty"`            // 1
 
 	// Extra properties for plugins etc
-	Extra map[string]string `required:"0" json:"extra" yaml:"extra"`
+	Extra map[string]string `required:"0" json:"extra,omitempty" yaml:"extra,omitempty"`
 }
 
 // ContainerConfig is used if the runtime is specified to run inside a container
@@ -102,6 +104,31 @@ const (
 
 // Plugin represents either a plugin name or a dependency-string description of where to get it
 type Plugin string
+
+// Validate checks a Runtime for missing fields
+func (cfg Runtime) Validate() (err error) {
+	if cfg.WorkingDir == "" {
+		return errors.New("WorkingDir empty")
+	}
+
+	if cfg.Platform == "" {
+		return errors.New("Platform empty")
+	}
+
+	if cfg.Format == "" {
+		return errors.New("Format empty")
+	}
+
+	if cfg.Version == "" {
+		return errors.New("Version empty")
+	}
+
+	if cfg.Mode == "" {
+		return errors.New("Mode empty")
+	}
+
+	return
+}
 
 // RuntimeFromDir creates a config from a directory by searching for a JSON or YAML file to
 // read settings from. If both exist, the JSON file takes precedence.
@@ -127,7 +154,6 @@ func RuntimeFromDir(dir string) (cfg Runtime, err error) {
 	}
 
 	err = errors.New("directory does not contain a samp.json or samp.yaml file")
-
 	return
 }
 
@@ -194,26 +220,37 @@ func (cfg *Runtime) ResolveRemotePlugins() {
 // GetRuntimeDefault returns a default config for temporary runtimes
 func GetRuntimeDefault() (config *Runtime) {
 	return &Runtime{
-		RCONPassword: &[]string{"temp"}[0],
+		Version:      "0.3.7",
+		RCONPassword: &[]string{"password"}[0],
 		Port:         &[]int{7777}[0],
+		Mode:         Server,
 	}
 }
 
-// MergeRuntimeDefault returns a default config with the specified config merged on top
-func MergeRuntimeDefault(config *Runtime) (result *Runtime) {
-	def := GetRuntimeDefault()
-	if config == nil {
-		result = def
-	} else {
-		result = config
-		if config.RCONPassword == nil {
-			result.RCONPassword = def.RCONPassword
-		}
-		if config.Port == nil {
-			result.Port = def.Port
-		}
+// ApplyRuntimeDefaults modifies the input runtime config to apply defaults to
+// empty fields
+func ApplyRuntimeDefaults(rt *Runtime) {
+	if rt == nil {
+		panic("cannot apply runtime defaults to nil pointer")
 	}
-	return
+
+	def := GetRuntimeDefault()
+
+	if rt.Version == "" {
+		rt.Version = def.Version
+	}
+	if rt.Platform == "" {
+		rt.Platform = runtime.GOOS
+	}
+	if rt.RCONPassword == nil {
+		rt.RCONPassword = def.RCONPassword
+	}
+	if rt.Port == nil {
+		rt.Port = def.Port
+	}
+	if rt.Mode == "" {
+		rt.Mode = def.Mode
+	}
 }
 
 // AsDep attempts to interpret the plugin string as a dependency string

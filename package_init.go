@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"runtime"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
@@ -26,6 +26,13 @@ func packageInit(c *cli.Context) error {
 		print.SetVerbose()
 	}
 
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package init",
+			UserId: config.UserID,
+		})
+	}
+
 	dir := util.FullPath(c.String("dir"))
 
 	cacheDir, err := download.GetCacheDir()
@@ -34,12 +41,12 @@ func packageInit(c *cli.Context) error {
 		return err
 	}
 
-	_, err = rook.PackageFromDir(true, dir, runtime.GOOS, "")
+	_, err = rook.NewPackageContext(gh, gitAuth, true, dir, platform(c), cacheDir, "")
 	if err == nil {
 		return errors.New("Directory already appears to be a package")
 	}
 
-	err = rook.Init(context.Background(), gh, dir, config, gitAuth, runtime.GOOS, cacheDir)
+	err = rook.Init(context.Background(), gh, dir, config, gitAuth, platform(c), cacheDir)
 
 	return err
 }

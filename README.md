@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/Southclaws/sampctl.svg?branch=master)](https://travis-ci.org/Southclaws/sampctl)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Southclaws/sampctl)](https://goreportcard.com/report/github.com/Southclaws/sampctl)
-[![https://img.shields.io/badge/Ko--Fi-Buy%20Me%20a%20Coffee-brown.svg](https://img.shields.io/badge/Ko--Fi-Buy%20Me%20a%20Coffee-brown.svg)](https://ko-fi.com/southclaws)
+[![Ko-Fi](https://shields.southcla.ws/badge/Ko--Fi-Buy%20Me%20a%20Coffee-brown.svg)](https://ko-fi.com/southclaws)
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FSouthclaws%2Fsampctl.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FSouthclaws%2Fsampctl?ref=badge_shield)
 
 ![sampctl-logo](sampctl-wordmark.png)
@@ -10,7 +10,40 @@
 The Swiss Army Knife of SA:MP - vital tools for any server owner or library
 maintainer.
 
+sampctl is a **command-line development tool** for developing SA:MP **Pawn
+scripts**. It includes a **package manager**, a **build tool** and a
+**configuration manager**.
+
+If that sentence meant nothing to you, don't worry! You'll probably find use in
+sampctl if you do anything related to the Pawn language. Below are some
+explanations of what the terms in bold above mean.
+
+* **command-line development tool**: Whether you're a seasoned developer or just
+  a beginner, mastering the command-line on Windows and Unix systems is
+  absolutely necessary to speed up your workflow, take advantage of tools (like
+  this one) and just generally improve your knowledge of computing. If you've
+  never opened Cmd, PowerShell (Windows) or Terminal (Mac) then
+  [read this guide](https://www.learnenough.com/command-line-tutorial).
+* **Pawn scripts**: This includes gamemodes, filterscripts and libraries
+  (includes). sampctl introduces the concept of **packages** to the SA:MP and
+  Pawn world to make everyone's life easier.
+* **package manager**: This allows you to easily use and share packages, no more
+  downloading outdated `.inc` files from solidfiles...
+* **build tool**: Easily experiment with new versions of the compiler with a
+  simpler setup and automatic download feature.
+* **configuration manager**: server.cfg files can get messy and unmanageable,
+  sampctl can generate this file automatically from a much cleaner looking JSON
+  or YAML equivalent.
+
+[For a **quick-start** guide, click this link!](https://github.com/Southclaws/sampctl/wiki/Quick-Overview)
+
 ## Features
+
+As mentioned above, sampctl is a **command-line development tool** so it has no
+graphical user interface. The videos below show sampctl being used with
+[Visual Studio Code](https://code.visualstudio.com) which is a light-weight text
+editor that works very well with sampctl to provide the perfect SA:MP/Pawn
+development environment.
 
 ### Package Manager
 
@@ -65,10 +98,9 @@ Installation is simple and fast on all platforms so why not give sampctl a try?
 
 ## Usage
 
-Scroll to the end of this document for an overview of the commands.
+[For a list of commands, click here.](https://github.com/Southclaws/sampctl#sampctl-1)
 
-Or visit the [wiki](https://github.com/Southclaws/sampctl/wiki) for all the
-information you need.
+[Or visit the Wiki site for documentation on each feature.](https://github.com/Southclaws/sampctl/wiki).
 
 ---
 
@@ -182,7 +214,7 @@ directory.
 ---
 # `sampctl`
 
-1.7.0 - Southclaws <hello@southcla.ws>
+1.8.27 - Southclaws <hello@southcla.ws>
 
 The Swiss Army Knife of SA:MP - vital tools for any server owner or library maintainer.
 
@@ -205,6 +237,8 @@ Bootstrap a new SA:MP server and generates a `samp.json`/`samp.yaml` configurati
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--version value`: the SA:MP server version to use (default: "0.3.7")
 - `--dir value`: working directory for the server - by default, uses the current directory (default: ".")
 
@@ -217,6 +251,8 @@ Downloads the files necessary to run a SA:MP server to the current directory (un
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--version value`: the SA:MP server version to use (default: "0.3.7")
 - `--dir value`: working directory for the server - by default, uses the current directory (default: ".")
 
@@ -229,6 +265,8 @@ Ensures the server environment is representative of the configuration specified 
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the server - by default, uses the current directory (default: ".")
 - `--noCache --forceEnsure`: forces download of plugins if --forceEnsure is set
 
@@ -241,6 +279,8 @@ Generates a `server.cfg` file based on the configuration inside `samp.json`/`sam
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the server - by default, uses the current directory (default: ".")
 - `--container`: starts the server as a Linux container instead of running it in the current directory
 - `--mountCache --container`: if --container is set, mounts the local cache directory inside the container
@@ -255,7 +295,7 @@ Usage: `sampctl package <subcommand>`
 
 For managing Pawn packages such as gamemodes and libraries.
 
-#### Subcommands (7)
+#### Subcommands (9)
 
 ### `sampctl package init`
 
@@ -266,6 +306,8 @@ Helper tool to bootstrap a new package or turn an existing project into a packag
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the project - by default, uses the current directory (default: ".")
 
 ### `sampctl package ensure`
@@ -277,19 +319,51 @@ Ensures dependencies are up to date based on the `dependencies` field in `pawn.j
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the project - by default, uses the current directory (default: ".")
+- `--update`: update cached dependencies to latest version
 
 ### `sampctl package install`
 
 Usage: `sampctl package install [package definition]`
 
-Installs a new package by adding it to the `dependencies` field in `pawn.json`/`pawn.yaml` downloads the contents.
+Installs a new package by adding it to the `dependencies` field in `pawn.json`/`pawn.yaml` and downloads the contents.
 
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the project - by default, uses the current directory (default: ".")
 - `--dev`: for specifying dependencies only necessary for development or testing of the package
+
+### `sampctl package uninstall`
+
+Usage: `sampctl package uninstall [package definition]`
+
+Uninstalls package by removing it from the `dependencies` field in `pawn.json`/`pawn.yaml` and deletes the contents.
+
+#### Flags
+
+- `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
+- `--dir value`: working directory for the project - by default, uses the current directory (default: ".")
+- `--dev`: for specifying dependencies only necessary for development or testing of the package
+
+### `sampctl package release`
+
+Usage: `sampctl package release`
+
+Creates a release version and tags the repository with the next version number, creates a GitHub release with archived package files.
+
+#### Flags
+
+- `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
+- `--dir value`: working directory for the project - by default, uses the current directory (default: ".")
 
 ### `sampctl package get`
 
@@ -300,6 +374,8 @@ Clones a GitHub package to either a directory named after the repo or, if the cw
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 
 ### `sampctl package build`
 
@@ -310,8 +386,9 @@ Builds a package defined by a `pawn.json`/`pawn.yaml` file.
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the project - by default, uses the current directory (default: ".")
-- `--build value`: build configuration to use
 - `--forceEnsure`: forces dependency ensure before build
 - `--dryRun`: does not run the build but outputs the command necessary to do so
 - `--watch`: keeps sampctl running and triggers builds whenever source files change
@@ -327,10 +404,10 @@ Compiles and runs a package defined by a `pawn.json`/`pawn.yaml` file.
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
-- `--version value`: the SA:MP server version to use (default: "0.3.7")
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the server - by default, uses the current directory (default: ".")
 - `--container`: starts the server as a Linux container instead of running it in the current directory
-- `--mountCache --container`: if --container is set, mounts the local cache directory inside the container
 - `--build --forceBuild`: build configuration to use if --forceBuild is set
 - `--forceBuild`: forces a build to run before executing the server
 - `--forceEnsure --forceBuild`: forces dependency ensure before build if --forceBuild is set
@@ -356,7 +433,10 @@ Creates a template package from the current directory if it is a package.
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--dir value`: working directory for the package - by default, uses the current directory (default: ".")
+- `--update`: update cached dependencies to latest version
 
 ### `sampctl package template build`
 
@@ -367,6 +447,8 @@ Builds the specified file in the context of the given template.
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 
 ### `sampctl package template run`
 
@@ -377,6 +459,8 @@ Builds and runs the specified file in the context of the given template.
 #### Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--version value`: the SA:MP server version to use (default: "0.3.7")
 - `--mode value`: runtime mode, one of: server, main, y_testing (default: "main")
 
@@ -413,6 +497,8 @@ Usage: `Shows a list of commands or help for one command`
 ## Global Flags
 
 - `--verbose`: output all detailed information - useful for debugging
+- `--platform windows`: manually specify the target platform for downloaded binaries to either windows, `linux` or `darwin`.
+- `--bare`: skip all pre-run configuration
 - `--help, -h`: show help
 - `--appVersion, -V`: sampctl version
 

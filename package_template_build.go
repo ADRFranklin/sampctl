@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"runtime"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
@@ -29,6 +29,13 @@ func packageTemplateBuild(c *cli.Context) (err error) {
 		return nil
 	}
 
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package template build",
+			UserId: config.UserID,
+		})
+	}
+
 	cacheDir, err := download.GetCacheDir()
 	if err != nil {
 		return
@@ -45,7 +52,7 @@ func packageTemplateBuild(c *cli.Context) (err error) {
 		return errors.Errorf("no such file or directory: %s", filename)
 	}
 
-	pkg, err := rook.PackageFromDir(true, templatePath, runtime.GOOS, "")
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, templatePath, platform(c), cacheDir, "")
 	if err != nil {
 		return errors.Wrap(err, "template package is invalid")
 	}
@@ -55,7 +62,7 @@ func packageTemplateBuild(c *cli.Context) (err error) {
 		return errors.Wrap(err, "failed to copy target script to template package directory")
 	}
 
-	problems, result, err := rook.Build(context.Background(), gh, gitAuth, &pkg, "", cacheDir, runtime.GOOS, false, false, true, "")
+	problems, result, err := pcx.Build(context.Background(), "", false, false, true, "")
 	if err != nil {
 		return
 	}

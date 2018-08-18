@@ -13,7 +13,7 @@ import (
 	"github.com/Southclaws/sampctl/versioning"
 )
 
-func TestPackage_Install(t *testing.T) {
+func Test_PackageInstall(t *testing.T) {
 	type args struct {
 		targets     []versioning.DependencyString
 		development bool
@@ -29,15 +29,15 @@ func TestPackage_Install(t *testing.T) {
 			"repo": "install-test",
 			"entry": "gamemodes/test.pwn",
 			"output": "gamemodes/test.amx",
-			"dependencies": ["Southclaws/samp-stdlib"]
-		}`), args{[]versioning.DependencyString{"Southclaws/samp-ini"}, false}, false},
+			"dependencies": ["sampctl/samp-stdlib"]
+		}`), args{[]versioning.DependencyString{"thecodeah/pawn-humanize:v1.1.1"}, false}, false},
 		{"dev", []byte(`{
 			"user": "Southclaws",
 			"repo": "install-test",
 			"entry": "gamemodes/test.pwn",
 			"output": "gamemodes/test.amx",
-			"dependencies": ["Southclaws/samp-stdlib"]
-		}`), args{[]versioning.DependencyString{"Southclaws/samp-ini"}, true}, false},
+			"dependencies": ["sampctl/samp-stdlib"]
+		}`), args{[]versioning.DependencyString{"thecodeah/pawn-humanize:v1.1.1"}, true}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -47,37 +47,37 @@ func TestPackage_Install(t *testing.T) {
 
 			ioutil.WriteFile(filepath.Join(dir, "pawn.json"), tt.pkg, 0755) // nolint
 
-			pkg, err := PackageFromDir(true, dir, runtime.GOOS, "")
+			pcx1, err := NewPackageContext(gh, gitAuth, true, dir, runtime.GOOS, "./tests/cache", "")
 			if err != nil {
 				t.Error(err)
 			}
 
-			err = Install(context.Background(), gh, pkg, tt.args.targets, tt.args.development, nil, runtime.GOOS, "./tests/cache")
+			err = pcx1.Install(context.Background(), tt.args.targets, tt.args.development)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}
 
-			pkg, err = PackageFromDir(true, dir, runtime.GOOS, "")
+			pcx2, err := NewPackageContext(gh, gitAuth, true, dir, runtime.GOOS, "./tests/cache", "")
 			if err != nil {
 				t.Error(err)
 			}
 
 			if tt.args.development {
 				for _, target := range tt.args.targets {
-					assert.Contains(t, pkg.Development, target)
+					assert.Contains(t, pcx2.Package.Development, target)
 				}
 			} else {
 				for _, target := range tt.args.targets {
-					assert.Contains(t, pkg.Dependencies, target)
+					assert.Contains(t, pcx2.Package.Dependencies, target)
 				}
 			}
 		})
 	}
 }
 
-func TestGet(t *testing.T) {
+func Test_PackageGet(t *testing.T) {
 	type args struct {
 		dep versioning.DependencyMeta
 		dir string
@@ -87,8 +87,8 @@ func TestGet(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"direct", args{versioning.DependencyMeta{Site: "github.com", User: "Southclaws", Repo: "samp-logger"}, "./tests/get/direct"}, false},
-		{"get-auto", args{versioning.DependencyMeta{Site: "github.com", User: "Southclaws", Repo: "samp-logger"}, "./tests/get"}, false},
+		{"direct", args{versioning.DependencyMeta{Site: "github.com", User: "thecodeah", Repo: "pawn-humanize", Tag: "v1.1.1"}, "./tests/get/direct"}, false},
+		{"get-auto", args{versioning.DependencyMeta{Site: "github.com", User: "thecodeah", Repo: "pawn-humanize", Tag: "v1.1.1"}, "./tests/get"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

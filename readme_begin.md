@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/Southclaws/sampctl.svg?branch=master)](https://travis-ci.org/Southclaws/sampctl)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Southclaws/sampctl)](https://goreportcard.com/report/github.com/Southclaws/sampctl)
-[![https://img.shields.io/badge/Ko--Fi-Buy%20Me%20a%20Coffee-brown.svg](https://img.shields.io/badge/Ko--Fi-Buy%20Me%20a%20Coffee-brown.svg)](https://ko-fi.com/southclaws)
+[![Ko-Fi](https://shields.southcla.ws/badge/Ko--Fi-Buy%20Me%20a%20Coffee-brown.svg)](https://ko-fi.com/southclaws)
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FSouthclaws%2Fsampctl.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FSouthclaws%2Fsampctl?ref=badge_shield)
 
 ![sampctl-logo](sampctl-wordmark.png)
@@ -10,7 +10,40 @@
 The Swiss Army Knife of SA:MP - vital tools for any server owner or library
 maintainer.
 
+sampctl is a **command-line development tool** for developing SA:MP **Pawn
+scripts**. It includes a **package manager**, a **build tool** and a
+**configuration manager**.
+
+If that sentence meant nothing to you, don't worry! You'll probably find use in
+sampctl if you do anything related to the Pawn language. Below are some
+explanations of what the terms in bold above mean.
+
+* **command-line development tool**: Whether you're a seasoned developer or just
+  a beginner, mastering the command-line on Windows and Unix systems is
+  absolutely necessary to speed up your workflow, take advantage of tools (like
+  this one) and just generally improve your knowledge of computing. If you've
+  never opened Cmd, PowerShell (Windows) or Terminal (Mac) then
+  [read this guide](https://www.learnenough.com/command-line-tutorial).
+* **Pawn scripts**: This includes gamemodes, filterscripts and libraries
+  (includes). sampctl introduces the concept of **packages** to the SA:MP and
+  Pawn world to make everyone's life easier.
+* **package manager**: This allows you to easily use and share packages, no more
+  downloading outdated `.inc` files from solidfiles...
+* **build tool**: Easily experiment with new versions of the compiler with a
+  simpler setup and automatic download feature.
+* **configuration manager**: server.cfg files can get messy and unmanageable,
+  sampctl can generate this file automatically from a much cleaner looking JSON
+  or YAML equivalent.
+
+[For a **quick-start** guide, click this link!](https://github.com/Southclaws/sampctl/wiki/Quick-Overview)
+
 ## Features
+
+As mentioned above, sampctl is a **command-line development tool** so it has no
+graphical user interface. The videos below show sampctl being used with
+[Visual Studio Code](https://code.visualstudio.com) which is a light-weight text
+editor that works very well with sampctl to provide the perfect SA:MP/Pawn
+development environment.
 
 ### Package Manager
 
@@ -65,10 +98,9 @@ Installation is simple and fast on all platforms so why not give sampctl a try?
 
 ## Usage
 
-Scroll to the end of this document for an overview of the commands.
+[For a list of commands, click here.](https://github.com/Southclaws/sampctl#sampctl-1)
 
-Or visit the [wiki](https://github.com/Southclaws/sampctl/wiki) for all the
-information you need.
+[Or visit the Wiki site for documentation on each feature.](https://github.com/Southclaws/sampctl/wiki).
 
 ---
 

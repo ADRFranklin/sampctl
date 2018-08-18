@@ -28,26 +28,26 @@ func TestCompileSource(t *testing.T) {
 		wantOutput   bool
 	}{
 		{"simple-pass", args{
-			util.FullPath("./tests/cache-compile"),
+			util.FullPath("./tests/cache"),
 			types.BuildConfig{
 				WorkingDir: "./tests/build-simple-pass",
 				Input:      "./tests/build-simple-pass/script.pwn",
 				Output:     "./tests/build-simple-pass/script.amx",
 				Includes:   []string{},
-				Version:    "3.10.4",
+				Version:    "3.10.8",
 			}, false},
 			nil,
 			types.BuildResult{},
 			false, true},
 		{"simple-pass-d3", args{
-			util.FullPath("./tests/cache-compile"),
+			util.FullPath("./tests/cache"),
 			types.BuildConfig{
 				WorkingDir: "./tests/build-simple-pass",
 				Input:      "./tests/build-simple-pass/script.pwn",
 				Output:     "./tests/build-simple-pass/script.amx",
 				Args:       []string{"-d3"},
 				Includes:   []string{},
-				Version:    "3.10.4",
+				Version:    "3.10.8",
 			}, false},
 			nil,
 			types.BuildResult{
@@ -60,48 +60,48 @@ func TestCompileSource(t *testing.T) {
 			},
 			false, true},
 		{"simple-fail", args{
-			util.FullPath("./tests/cache-compile"),
+			util.FullPath("./tests/cache"),
 			types.BuildConfig{
 				WorkingDir: "./tests/build-simple-fail",
 				Input:      "./tests/build-simple-fail/script.pwn",
 				Output:     "./tests/build-simple-fail/script.amx",
 				Includes:   []string{},
-				Version:    "3.10.4",
+				Version:    "3.10.8",
 			}, false},
 			types.BuildProblems{
 				{File: "script.pwn", Line: 1, Severity: types.ProblemError, Description: `invalid function or declaration`},
 				{File: "script.pwn", Line: 3, Severity: types.ProblemError, Description: `invalid function or declaration`},
-				{File: "script.pwn", Line: 6, Severity: types.ProblemWarning, Description: `symbol is never used: "a"`},
-				{File: "script.pwn", Line: 6, Severity: types.ProblemError, Description: `no entry point (no public functions)`},
+				{File: "script.pwn", Line: 2, Severity: types.ProblemWarning, Description: `symbol is never used: "a"`},
+				{File: "script.pwn", Line: 2, Severity: types.ProblemError, Description: `no entry point (no public functions)`},
 			},
 			types.BuildResult{},
 			false, false},
 		{"simple-fail-rel", args{
-			util.FullPath("./tests/cache-compile"),
+			util.FullPath("./tests/cache"),
 			types.BuildConfig{
 				WorkingDir: "./tests/build-simple-fail",
 				Input:      "./tests/build-simple-fail/script.pwn",
 				Output:     "./tests/build-simple-fail/script.amx",
 				Includes:   []string{},
-				Version:    "3.10.4",
+				Version:    "3.10.8",
 			}, true},
 			types.BuildProblems{
 				{File: "script.pwn", Line: 1, Severity: types.ProblemError, Description: `invalid function or declaration`},
 				{File: "script.pwn", Line: 3, Severity: types.ProblemError, Description: `invalid function or declaration`},
-				{File: "script.pwn", Line: 6, Severity: types.ProblemWarning, Description: `symbol is never used: "a"`},
-				{File: "script.pwn", Line: 6, Severity: types.ProblemError, Description: `no entry point (no public functions)`},
+				{File: "script.pwn", Line: 2, Severity: types.ProblemWarning, Description: `symbol is never used: "a"`},
+				{File: "script.pwn", Line: 2, Severity: types.ProblemError, Description: `no entry point (no public functions)`},
 			},
 			types.BuildResult{},
 			false, false},
 		{"local-include-pass", args{
-			util.FullPath("./tests/cache-compile"),
+			util.FullPath("./tests/cache"),
 			types.BuildConfig{
 				WorkingDir: "./tests/build-local-include-pass",
 				Input:      "./tests/build-local-include-pass/script.pwn",
 				Output:     "./tests/build-local-include-pass/script.amx",
 				Args:       []string{"-d3", "-;+", "-(+", "-\\+", "-Z+"},
 				Includes:   []string{},
-				Version:    "3.10.4",
+				Version:    "3.10.8",
 			}, false},
 			nil,
 			types.BuildResult{
@@ -114,14 +114,14 @@ func TestCompileSource(t *testing.T) {
 			},
 			false, true},
 		{"local-include-warn", args{
-			util.FullPath("./tests/cache-compile"),
+			util.FullPath("./tests/cache"),
 			types.BuildConfig{
 				WorkingDir: "./tests/build-local-include-warn",
 				Input:      "./tests/build-local-include-warn/script.pwn",
 				Output:     "./tests/build-local-include-warn/script.amx",
 				Args:       []string{"-d3", "-;+", "-(+", "-\\+", "-Z+"},
 				Includes:   []string{},
-				Version:    "3.10.4",
+				Version:    "3.10.8",
 			}, false},
 			types.BuildProblems{
 				{File: "library.inc", Line: 6, Severity: types.ProblemWarning, Description: `symbol is never used: "b"`},
@@ -137,14 +137,14 @@ func TestCompileSource(t *testing.T) {
 			},
 			false, true},
 		{"fatal", args{
-			util.FullPath("./tests/cache-compile"),
+			util.FullPath("./tests/cache"),
 			types.BuildConfig{
 				WorkingDir: "./tests/build-fatal",
 				Input:      "./tests/build-fatal/script.pwn",
 				Output:     "./tests/build-fatal/script.amx",
 				Args:       []string{"-d3", "-;+", "-(+", "-\\+", "-Z+"},
 				Includes:   []string{},
-				Version:    "3.10.4",
+				Version:    "3.10.8",
 			}, false},
 			types.BuildProblems{
 				{File: "script.pwn", Line: 1, Severity: types.ProblemFatal, Description: `cannot read from file: "idonotexist"`},

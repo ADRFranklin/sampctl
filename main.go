@@ -9,8 +9,11 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/google/go-github/github"
+	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport"
+	"gopkg.in/src-d/go-git.v4/plumbing/transport/http"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
 	"gopkg.in/urfave/cli.v1"
 
@@ -20,13 +23,21 @@ import (
 )
 
 var (
-	version = "master"
-	config  *types.Config        // global config
-	gh      *github.Client       // a github client to use for API requests
-	gitAuth transport.AuthMethod // for private dependencies
+	version    = "master"
+	segmentKey = ""
+	config     *types.Config        // global config
+	gh         *github.Client       // a github client to use for API requests
+	gitAuth    transport.AuthMethod // for private dependencies
+	segment    analytics.Client     // segment.io client
 )
 
 func main() {
+	cacheDir, err := download.GetCacheDir()
+	if err != nil {
+		print.Erro("Failed to retrieve cache directory path (attempted <user folder>/.samp) ", err)
+		return
+	}
+
 	app := cli.NewApp()
 
 	app.Author = "Southclaws"
@@ -41,37 +52,19 @@ func main() {
 		Usage: "sampctl version",
 	}
 
-	cacheDir, err := download.GetCacheDir()
-	if err != nil {
-		print.Erro("Failed to retrieve cache directory path (attempted <user folder>/.samp) ", err)
-		return
-	}
-
-	config, err = types.LoadOrCreateConfig(cacheDir)
-	if err != nil {
-		print.Erro("Failed to load or create sampctl config in", cacheDir, "-", err)
-		return
-	}
-
-	if config.GitHubToken == "" {
-		gh = github.NewClient(nil)
-	} else {
-		gh = github.NewClient(oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: config.GitHubToken})))
-	}
-
-	// if config.GitUsername != "" && config.GitPassword != "" {
-	// 	gitAuth = http.NewBasicAuth(config.GitUsername, config.GitPassword)
-	// }
-
-	gitAuth, err = ssh.DefaultAuthBuilder("git")
-	if err != nil {
-		print.Verb("Failed to set up SSH:", err)
-	}
-
 	globalFlags := []cli.Flag{
 		cli.BoolFlag{
 			Name:  "verbose",
 			Usage: "output all detailed information - useful for debugging",
+		},
+		cli.StringFlag{
+			Name:  "platform",
+			Value: "",
+			Usage: "manually specify the target platform for downloaded binaries to either `windows`, `linux` or `darwin`.",
+		},
+		cli.BoolFlag{
+			Name:  "bare",
+			Usage: "skip all pre-run configuration",
 		},
 	}
 	app.Commands = []cli.Command{
@@ -134,10 +127,25 @@ func main() {
 				{
 					Name:         "install",
 					Usage:        "sampctl package install [package definition]",
-					Description:  "Installs a new package by adding it to the `dependencies` field in `pawn.json`/`pawn.yaml` downloads the contents.",
+					Description:  "Installs a new package by adding it to the `dependencies` field in `pawn.json`/`pawn.yaml` and downloads the contents.",
 					Action:       packageInstall,
 					Flags:        append(globalFlags, packageInstallFlags...),
 					BashComplete: packageInstallBash,
+				},
+				{
+					Name:         "uninstall",
+					Usage:        "sampctl package uninstall [package definition]",
+					Description:  "Uninstalls package by removing it from the `dependencies` field in `pawn.json`/`pawn.yaml` and deletes the contents.",
+					Action:       packageUninstall,
+					Flags:        append(globalFlags, packageUninstallFlags...),
+					BashComplete: packageUninstallBash,
+				},
+				{
+					Name:        "release",
+					Usage:       "sampctl package release",
+					Description: "Creates a release version and tags the repository with the next version number, creates a GitHub release with archived package files.",
+					Action:      packageRelease,
+					Flags:       append(globalFlags, packageReleaseFlags...),
 				},
 				{
 					Name:         "get",
@@ -216,12 +224,59 @@ func main() {
 
 	app.Flags = globalFlags
 	app.Before = func(c *cli.Context) error {
-		if c.GlobalBool("verbose") {
+		verbose := c.GlobalBool("verbose")
+
+		// "bare" mode is for CI use only
+		if c.GlobalBool("bare") {
+			return nil
+		}
+
+		if verbose {
 			print.SetVerbose()
+			print.Verb("Verbose logging active")
 		}
 		if runtime.GOOS != "windows" {
 			print.SetColoured()
 		}
+
+		config, err = types.LoadOrCreateConfig(cacheDir, verbose)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to load or create sampctl config in %s", cacheDir)
+		}
+
+		if config.GitHubToken == "" {
+			gh = github.NewClient(nil)
+		} else {
+			gh = github.NewClient(oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: config.GitHubToken})))
+		}
+
+		if config.GitUsername != "" && config.GitPassword != "" {
+			gitAuth = http.NewBasicAuth(config.GitUsername, config.GitPassword)
+		} else {
+			gitAuth, err = ssh.DefaultAuthBuilder("git")
+			if err != nil {
+				print.Verb("Failed to set up SSH:", err)
+			}
+		}
+
+		if config.CI != "" {
+			config.Metrics = false
+		}
+		if segmentKey == "" {
+			print.Warn("Segment.io key is unset!")
+			config.Metrics = false
+		}
+
+		if config.Metrics {
+			segment = analytics.New(segmentKey)
+			if config.NewUser {
+				print.Info("Usage metrics are active. See https://github.com/Southclaws/sampctl/wiki/Usage-Metrics for more information.")
+				segment.Enqueue(analytics.Identify{
+					UserId: config.UserID,
+				})
+			}
+		}
+
 		return nil
 	}
 	app.After = func(c *cli.Context) error {
@@ -234,7 +289,10 @@ func main() {
 		// that are even numbers. 12:56:44 will work, 12:57:44 will not, etc...
 		// this is done because the GitHub API has rate limits and we don't want to use all our requests
 		// up on version checks when package management is more important.
-		if !c.GlobalIsSet("generate-bash-completion") && time.Now().Minute()%2 == 0 && time.Now().Second()%2 == 0 {
+		if !c.GlobalIsSet("generate-bash-completion") &&
+			!c.GlobalIsSet("bare") &&
+			time.Now().Minute()%2 == 0 &&
+			time.Now().Second()%2 == 0 {
 			CheckForUpdates(app.Version)
 		}
 		return nil
@@ -245,52 +303,73 @@ func main() {
 		print.Erro(err)
 	}
 
-	err = types.WriteConfig(cacheDir, *config)
-	if err != nil {
-		print.Erro("Failed to write updated configuration file to", cacheDir, "-", err)
-		return
+	if config != nil {
+		err = types.WriteConfig(cacheDir, *config)
+		if err != nil {
+			print.Erro("Failed to write updated configuration file to", cacheDir, "-", err)
+			return
+		}
+	}
+
+	if segment != nil {
+		segment.Close()
 	}
 }
 
 // CheckForUpdates uses the GitHub API to check if a new release is available.
 func CheckForUpdates(thisVersion string) {
+	if gh == nil {
+		return
+	}
+
 	ctx, cf := context.WithTimeout(context.Background(), time.Second*10)
 	defer cf()
 
 	release, _, err := gh.Repositories.GetLatestRelease(ctx, "Southclaws", "sampctl")
 	if err != nil {
 		print.Erro("Failed to check for latest sampctl release:", err)
-	} else {
-		latest, err := semver.NewVersion(release.GetTagName())
-		if err != nil {
-			print.Erro("Failed to interpret latest release tag as a semantic version:", err)
-		}
-
-		this, err := semver.NewVersion(thisVersion)
-		if err != nil {
-			print.Erro("Failed to interpret this version number as a semantic version:", err)
-		}
-
-		if latest.GreaterThan(this) {
-			print.Info("\n-\n")
-			print.Info("sampctl version", latest.String(), "available!")
-			print.Info("You are currently using", thisVersion)
-			print.Info("To upgrade, use the following command:")
-			switch runtime.GOOS {
-			case "windows":
-				print.Info("  scoop update")
-				print.Info("  scoop update sampctl")
-			case "linux":
-				print.Info("  Debian/Ubuntu based systems:")
-				print.Info("  curl https://raw.githubusercontent.com/Southclaws/sampctl/master/install-deb.sh | sh")
-				print.Info("  CentOS/Red Hat based systems")
-				print.Info("  curl https://raw.githubusercontent.com/Southclaws/sampctl/master/install-rpm.sh | sh")
-			case "darwin":
-				print.Info("  brew update")
-				print.Info("  brew upgrade sampctl")
-			}
-			print.Info("If you have any problems upgrading, please open an issue:")
-			print.Info("  https://github.com/Southclaws/sampctl/issues/new")
-		}
+		return
 	}
+
+	latest, err := semver.NewVersion(release.GetTagName())
+	if err != nil {
+		print.Erro("Failed to interpret latest release tag as a semantic version:", err)
+		return
+	}
+
+	this, err := semver.NewVersion(thisVersion)
+	if err != nil {
+		print.Erro("Failed to interpret this version number as a semantic version:", err)
+		return
+	}
+
+	if latest.GreaterThan(this) {
+		print.Info("\n-\n")
+		print.Info("sampctl version", latest.String(), "available!")
+		print.Info("You are currently using", thisVersion)
+		print.Info("To upgrade, use the following command:")
+		switch runtime.GOOS {
+		case "windows":
+			print.Info("  scoop update")
+			print.Info("  scoop update sampctl")
+		case "linux":
+			print.Info("  Debian/Ubuntu based systems:")
+			print.Info("  curl https://raw.githubusercontent.com/Southclaws/sampctl/master/install-deb.sh | sh")
+			print.Info("  CentOS/Red Hat based systems")
+			print.Info("  curl https://raw.githubusercontent.com/Southclaws/sampctl/master/install-rpm.sh | sh")
+		case "darwin":
+			print.Info("  brew update")
+			print.Info("  brew upgrade sampctl")
+		}
+		print.Info("If you have any problems upgrading, please open an issue:")
+		print.Info("  https://github.com/Southclaws/sampctl/issues/new")
+	}
+}
+
+func platform(c *cli.Context) (platform string) {
+	platform = c.String("platform")
+	if platform == "" {
+		platform = runtime.GOOS
+	}
+	return
 }

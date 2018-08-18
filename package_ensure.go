@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"runtime"
 	"time"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
@@ -20,11 +20,26 @@ var packageEnsureFlags = []cli.Flag{
 		Value: ".",
 		Usage: "working directory for the project - by default, uses the current directory",
 	},
+	cli.BoolFlag{
+		Name:  "update",
+		Usage: "update cached dependencies to latest version",
+	},
 }
 
 func packageEnsure(c *cli.Context) error {
 	if c.Bool("verbose") {
 		print.SetVerbose()
+	}
+
+	runtimeName := c.Args().Get(0)
+
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package run",
+			UserId: config.UserID,
+			Properties: analytics.NewProperties().
+				Set("runtime", runtimeName != ""),
+		})
 	}
 
 	cacheDir, err := download.GetCacheDir()
@@ -34,16 +49,23 @@ func packageEnsure(c *cli.Context) error {
 	}
 
 	dir := util.FullPath(c.String("dir"))
+	forceUpdate := c.Bool("update")
 
-	pkg, err := rook.PackageFromDir(true, dir, runtime.GOOS, "")
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, dir, platform(c), cacheDir, "")
 	if err != nil {
 		return errors.Wrap(err, "failed to interpret directory as Pawn package")
 	}
 
+	pcx.ActualRuntime, err = rook.GetRuntimeConfig(pcx.Package, runtimeName)
+	if err != nil {
+		return err
+	}
+	pcx.ActualRuntime.Platform = pcx.Platform
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 
-	err = rook.EnsureDependencies(ctx, gh, &pkg, gitAuth, runtime.GOOS, cacheDir)
+	err = pcx.EnsureDependencies(ctx, forceUpdate)
 	if err != nil {
 		return errors.Wrap(err, "failed to ensure")
 	}

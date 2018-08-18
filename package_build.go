@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
@@ -19,11 +21,6 @@ var packageBuildFlags = []cli.Flag{
 		Name:  "dir",
 		Value: ".",
 		Usage: "working directory for the project - by default, uses the current directory",
-	},
-	cli.StringFlag{
-		Name:  "build",
-		Value: "",
-		Usage: "build configuration to use",
 	},
 	cli.BoolFlag{
 		Name:  "forceEnsure",
@@ -60,35 +57,54 @@ func packageBuild(c *cli.Context) error {
 	buildFile := c.String("buildFile")
 	relativePaths := c.Bool("relativePaths")
 
-	build := c.Args().Get(1)
+	build := c.Args().Get(0)
+
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package build",
+			UserId: config.UserID,
+			Properties: analytics.NewProperties().
+				Set("forceEnsure", forceEnsure).
+				Set("watch", watch).
+				Set("watch", watch).
+				Set("buildFile", buildFile != "").
+				Set("build", build != ""),
+		})
+	}
 
 	cacheDir, err := download.GetCacheDir()
 	if err != nil {
 		return errors.Wrap(err, "failed to get or create cache directory")
 	}
 
-	pkg, err := rook.PackageFromDir(true, dir, runtime.GOOS, "")
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, dir, platform(c), cacheDir, "")
 	if err != nil {
 		return errors.Wrap(err, "failed to interpret directory as Pawn package")
 	}
 
 	if watch {
-		err := rook.BuildWatch(context.Background(), gh, gitAuth, &pkg, build, cacheDir, runtime.GOOS, forceEnsure, buildFile, relativePaths, nil)
+		err := pcx.BuildWatch(context.Background(), build, forceEnsure, buildFile, relativePaths, nil)
 		if err != nil {
 			return cli.NewExitError(err.Error(), 1)
 		}
 	} else {
-		problems, result, err := rook.Build(context.Background(), gh, gitAuth, &pkg, build, cacheDir, runtime.GOOS, forceEnsure, dryRun, relativePaths, buildFile)
+		problems, result, err := pcx.Build(context.Background(), build, forceEnsure, dryRun, relativePaths, buildFile)
 		if err != nil {
 			return cli.NewExitError(err.Error(), 1)
 		}
 
-		if len(problems.Errors()) > 0 {
-			print.Erro("Build failed with", len(problems), "problems")
+		if build == "" {
+			build = "default"
+		}
+
+		if problems.Fatal() {
+			return cli.NewExitError(errors.New("Build encountered fatal error"), 1)
+		} else if len(problems.Errors()) > 0 {
+			return cli.NewExitError(errors.Errorf("Build failed with %d problems", len(problems)), 1)
 		} else if len(problems.Warnings()) > 0 {
-			print.Warn("Build complete with", len(problems), "problems")
+			print.Warn("Build", build, "complete with", len(problems), "problems")
 		} else {
-			print.Info("Build successful with", len(problems), "problems")
+			print.Info("Build", build, "successful with", len(problems), "problems")
 		}
 
 		print.Verb(fmt.Sprintf("Results, in bytes: Header: %d, Code: %d, Data: %d, Stack/Heap: %d, Estimated usage: %d, Total: %d\n",
@@ -106,12 +122,17 @@ func packageBuild(c *cli.Context) error {
 func packageBuildBash(c *cli.Context) {
 	dir := util.FullPath(c.String("dir"))
 
-	pkg, err := rook.PackageFromDir(true, dir, runtime.GOOS, "")
+	cacheDir, err := download.GetCacheDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, dir, runtime.GOOS, cacheDir, "")
 	if err != nil {
 		return
 	}
 
-	for _, b := range pkg.Builds {
+	for _, b := range pcx.Package.Builds {
 		fmt.Println(b.Name)
 	}
 }

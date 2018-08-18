@@ -17,6 +17,11 @@ import (
 )
 
 func TestRun(t *testing.T) {
+	// these tests don't run on mac!
+	if runtime.GOOS == "darwin" {
+		return
+	}
+
 	tests := []struct {
 		name       string
 		wantOutput string
@@ -48,7 +53,7 @@ Number of vehicle models: 0
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 			defer cancel()
 
 			dir := util.FullPath(filepath.Join("./tests/run/", tt.name))

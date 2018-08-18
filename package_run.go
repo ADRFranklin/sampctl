@@ -3,24 +3,18 @@ package main
 import (
 	"context"
 	"os"
-	"runtime"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
 	"github.com/Southclaws/sampctl/print"
 	"github.com/Southclaws/sampctl/rook"
-	"github.com/Southclaws/sampctl/types"
 	"github.com/Southclaws/sampctl/util"
 )
 
 var packageRunFlags = []cli.Flag{
-	cli.StringFlag{
-		Name:  "version",
-		Value: "0.3.7",
-		Usage: "the SA:MP server version to use",
-	},
 	cli.StringFlag{
 		Name:  "dir",
 		Value: ".",
@@ -29,10 +23,6 @@ var packageRunFlags = []cli.Flag{
 	cli.BoolFlag{
 		Name:  "container",
 		Usage: "starts the server as a Linux container instead of running it in the current directory",
-	},
-	cli.BoolFlag{
-		Name:  "mountCache",
-		Usage: "if `--container` is set, mounts the local cache directory inside the container",
 	},
 	cli.StringFlag{
 		Name:  "build",
@@ -71,10 +61,8 @@ func packageRun(c *cli.Context) error {
 		print.SetVerbose()
 	}
 
-	version := c.String("version")
 	dir := util.FullPath(c.String("dir"))
 	container := c.Bool("container")
-	mountCache := c.Bool("mountCache")
 	build := c.String("build")
 	forceBuild := c.Bool("forceBuild")
 	forceEnsure := c.Bool("forceEnsure")
@@ -83,45 +71,50 @@ func packageRun(c *cli.Context) error {
 	buildFile := c.String("buildFile")
 	relativePaths := c.Bool("relativePaths")
 
+	runtimeName := c.Args().Get(0)
+
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package run",
+			UserId: config.UserID,
+			Properties: analytics.NewProperties().
+				Set("container", container).
+				Set("build", build).
+				Set("forceBuild", forceBuild).
+				Set("forceEnsure", forceEnsure).
+				Set("noCache", noCache).
+				Set("watch", watch).
+				Set("buildFile", buildFile != "").
+				Set("relativePaths", relativePaths),
+		})
+	}
+
 	cacheDir, err := download.GetCacheDir()
 	if err != nil {
 		print.Erro("Failed to retrieve cache directory path (attempted <user folder>/.samp) ")
 		return err
 	}
 
-	pkg, err := rook.PackageFromDir(true, dir, runtime.GOOS, "")
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, dir, platform(c), cacheDir, "")
 	if err != nil {
 		return errors.Wrap(err, "failed to interpret directory as Pawn package")
 	}
 
-	runner := rook.Runner{
-		Pkg: pkg,
-		Config: types.Runtime{
-			AppVersion: c.App.Version,
-			Version:    version,
-		},
-		GitHub:      gh,
-		Auth:        gitAuth,
-		CacheDir:    cacheDir,
-		Build:       build,
-		ForceBuild:  forceBuild,
-		ForceEnsure: forceEnsure,
-		NoCache:     noCache,
-		BuildFile:   buildFile,
-		Relative:    relativePaths,
-	}
-
-	if container {
-		runner.Config.Container = &types.ContainerConfig{MountCache: mountCache}
-		runner.Config.Platform = "linux"
-	} else {
-		runner.Config.Platform = runtime.GOOS
-	}
+	pcx.Runtime = runtimeName
+	pcx.Container = container
+	pcx.AppVersion = c.App.Version
+	pcx.CacheDir = cacheDir
+	pcx.BuildName = build
+	pcx.ForceBuild = forceBuild
+	pcx.ForceEnsure = forceEnsure
+	pcx.NoCache = noCache
+	pcx.BuildFile = buildFile
+	pcx.Relative = relativePaths
 
 	if watch {
-		err = runner.RunWatch(context.Background())
+		err = pcx.RunWatch(context.Background())
 	} else {
-		err = runner.Run(context.Background(), os.Stdout, os.Stdin)
+		err = pcx.Run(context.Background(), os.Stdout, os.Stdin)
 	}
 	if err != nil {
 		return cli.NewExitError(err.Error(), 1)

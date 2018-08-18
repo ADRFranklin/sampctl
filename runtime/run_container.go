@@ -44,6 +44,7 @@ func RunContainer(ctx context.Context, cfg sampctltypes.Runtime, cacheDir string
 	}
 
 	port := fmt.Sprint(*cfg.Port)
+	print.Verb("mounting package working directory at", cfg.WorkingDir, "into container at /samp")
 	mounts := []mount.Mount{
 		{
 			Type:   mount.TypeBind,
@@ -53,6 +54,7 @@ func RunContainer(ctx context.Context, cfg sampctltypes.Runtime, cacheDir string
 	}
 
 	if cfg.Container.MountCache {
+		print.Verb("mounting cache at", cacheDir, "into container at /root/.samp")
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   cacheDir,
@@ -95,7 +97,7 @@ func RunContainer(ctx context.Context, cfg sampctltypes.Runtime, cacheDir string
 
 	containerName := fmt.Sprintf("sampctl-%d", time.Now().Unix())
 
-	ctxPrepare, cancel := context.WithTimeout(ctx, time.Second*30)
+	ctxPrepare, cancel := context.WithTimeout(ctx, time.Minute*10)
 	defer cancel()
 
 	var cnt container.ContainerCreateCreatedBody

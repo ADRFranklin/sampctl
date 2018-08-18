@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
@@ -37,6 +37,15 @@ func packageInstall(c *cli.Context) error {
 	dir := util.FullPath(c.String("dir"))
 	development := c.Bool("dev")
 
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package install",
+			UserId: config.UserID,
+			Properties: analytics.NewProperties().
+				Set("development", development),
+		})
+	}
+
 	if len(c.Args()) == 0 {
 		cli.ShowCommandHelpAndExit(c, "install", 0)
 		return nil
@@ -53,12 +62,12 @@ func packageInstall(c *cli.Context) error {
 		deps = append(deps, versioning.DependencyString(dep))
 	}
 
-	pkg, err := rook.PackageFromDir(true, dir, runtime.GOOS, "")
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, dir, platform(c), cacheDir, "")
 	if err != nil {
 		return errors.Wrap(err, "failed to interpret directory as Pawn package")
 	}
 
-	err = rook.Install(context.Background(), gh, pkg, deps, development, gitAuth, runtime.GOOS, cacheDir)
+	err = pcx.Install(context.Background(), deps, development)
 	if err != nil {
 		return err
 	}

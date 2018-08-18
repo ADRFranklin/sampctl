@@ -23,41 +23,48 @@ func TestPackageFromDir(t *testing.T) {
 	}{
 		{"load-json", args{"tests/load-json"}, types.Package{
 			Parent:         true,
-			Local:          "tests/load-json",
+			LocalPath:      "tests/load-json",
 			Vendor:         "tests/load-json/dependencies",
 			Format:         "json",
 			DependencyMeta: versioning.DependencyMeta{User: "<none>", Repo: "<local>"},
 			Entry:          "gamemodes/test.pwn",
 			Output:         "gamemodes/test.amx",
 			Dependencies: []versioning.DependencyString{
-				"Southclaws/samp-stdlib:0.3.7-R2-2-1",
-				"Southclaws/SIF:1.6.2",
-				"Misiur/YSI-Includes",
-				"samp-incognito/samp-streamer-plugin:2.9.1",
-				"Zeex/amx_assembly",
-				"Zeex/samp-plugin-crashdetect/include",
+				"sampctl/samp-stdlib:0.3.7-R2-2-1",
+				"Southclaws/pawn-errors:1.2.3",
+			},
+			Runtime: &types.Runtime{
+				Version:      "0.3.7",
+				Platform:     runtime.GOOS,
+				RCONPassword: &[]string{"password"}[0],
+				Port:         &[]int{7777}[0],
+				Mode:         types.Server,
 			}},
 			false},
 		{"load-yaml", args{"tests/load-yaml"}, types.Package{
 			Parent:         true,
-			Local:          "tests/load-yaml",
+			LocalPath:      "tests/load-yaml",
 			Vendor:         "tests/load-yaml/dependencies",
 			Format:         "yaml",
 			DependencyMeta: versioning.DependencyMeta{User: "<none>", Repo: "<local>"},
 			Entry:          "gamemodes/test.pwn",
 			Output:         "gamemodes/test.amx",
 			Dependencies: []versioning.DependencyString{
-				"Southclaws/samp-stdlib:0.3.7-R2-2-1",
-				"Southclaws/SIF:1.6.2",
-				"Misiur/YSI-Includes",
-				"samp-incognito/samp-streamer-plugin:2.9.1",
-				"Zeex/amx_assembly",
+				"sampctl/samp-stdlib:0.3.7-R2-2-1",
+				"Southclaws/pawn-errors:1.2.3",
+			},
+			Runtime: &types.Runtime{
+				Version:      "0.3.7",
+				Platform:     runtime.GOOS,
+				RCONPassword: &[]string{"password"}[0],
+				Port:         &[]int{7777}[0],
+				Mode:         types.Server,
 			}},
 			false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPkg, err := PackageFromDir(true, tt.args.dir, runtime.GOOS, "")
+			gotPcx, err := NewPackageContext(gh, gitAuth, true, tt.args.dir, runtime.GOOS, "./tests/cache", "")
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -66,7 +73,7 @@ func TestPackageFromDir(t *testing.T) {
 
 			tt.wantPkg.Vendor = filepath.FromSlash(tt.wantPkg.Vendor)
 
-			assert.Equal(t, tt.wantPkg, gotPkg)
+			assert.Equal(t, tt.wantPkg, gotPcx.Package)
 		})
 	}
 }

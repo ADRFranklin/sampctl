@@ -21,7 +21,7 @@ import (
 // ExtractFunc represents a function responsible for extracting a set of files from an archive to
 // a directory. The map argument contains a map of source files in the archive to target file
 // locations on the host filesystem (absolute paths).
-type ExtractFunc func(string, string, map[string]string) error
+type ExtractFunc func(string, string, map[string]string) (map[string]string, error)
 
 const (
 	// ExtractZip is an extract function for .zip packages
@@ -69,7 +69,7 @@ func FromCache(cacheDir, filename, dir string, method ExtractFunc, paths map[str
 		return
 	}
 
-	err = method(path, dir, paths)
+	_, err = method(path, dir, paths)
 	if err != nil {
 		hit = false
 		err = errors.Wrapf(err, "failed to unzip package %s", path)
@@ -110,7 +110,7 @@ func FromNet(location, cacheDir, filename string) (result string, err error) {
 }
 
 // ReleaseAssetByPattern downloads a resource file, which is a GitHub release asset
-func ReleaseAssetByPattern(ctx context.Context, gh *github.Client, meta versioning.DependencyMeta, matcher *regexp.Regexp, dir, outputFile, cacheDir string) (filename string, err error) {
+func ReleaseAssetByPattern(ctx context.Context, gh *github.Client, meta versioning.DependencyMeta, matcher *regexp.Regexp, dir, outputFile, cacheDir string) (filename, tag string, err error) {
 	var (
 		asset  *github.ReleaseAsset
 		assets []string
@@ -118,7 +118,7 @@ func ReleaseAssetByPattern(ctx context.Context, gh *github.Client, meta versioni
 
 	var release *github.RepositoryRelease
 	if meta.Tag == "" {
-		release, _, err = gh.Repositories.GetLatestRelease(ctx, meta.User, meta.Repo)
+		release, err = getLatestReleaseOrPreRelease(ctx, gh, meta.User, meta.Repo)
 	} else {
 		release, _, err = gh.Repositories.GetReleaseByTag(ctx, meta.User, meta.Repo, meta.Tag)
 	}
@@ -137,6 +137,7 @@ func ReleaseAssetByPattern(ctx context.Context, gh *github.Client, meta versioni
 		err = errors.Errorf("resource matcher '%s' does not match any release assets from '%v'", matcher, assets)
 		return
 	}
+	tag = release.GetTagName()
 
 	if outputFile == "" {
 		var u *url.URL
@@ -151,5 +152,22 @@ func ReleaseAssetByPattern(ctx context.Context, gh *github.Client, meta versioni
 	}
 
 	filename, err = FromNet(*asset.BrowserDownloadURL, cacheDir, outputFile)
+	return
+}
+
+func getLatestReleaseOrPreRelease(ctx context.Context, gh *github.Client, owner, repo string) (release *github.RepositoryRelease, err error) {
+	releases, _, err := gh.Repositories.ListReleases(ctx, owner, repo, &github.ListOptions{})
+	if err != nil {
+		err = errors.Wrap(err, "failed to list releases")
+		return
+	}
+
+	if len(releases) == 0 {
+		err = errors.New("no releases available")
+		return
+	}
+
+	release = releases[0]
+
 	return
 }

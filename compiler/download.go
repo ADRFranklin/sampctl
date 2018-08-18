@@ -23,7 +23,7 @@ func FromCache(meta versioning.DependencyMeta, dir, platform, cacheDir string) (
 		return
 	}
 
-	filename := fmt.Sprintf("pawn-%s-%s", meta.Tag, platform)
+	filename := GetCompilerFilename(meta.Tag, platform, compiler.Method)
 
 	print.Verb("Checking for cached package", filename, "in", cacheDir)
 
@@ -59,7 +59,7 @@ func FromNet(ctx context.Context, gh *github.Client, meta versioning.DependencyM
 		}
 	}
 
-	path, err := download.ReleaseAssetByPattern(ctx, gh, meta, regexp.MustCompile(compiler.Match), "", fmt.Sprintf("pawn-%s-%s", meta.Tag, platform), cacheDir)
+	path, _, err := download.ReleaseAssetByPattern(ctx, gh, meta, regexp.MustCompile(compiler.Match), "", GetCompilerFilename(meta.Tag, platform, compiler.Method), cacheDir)
 	if err != nil {
 		return
 	}
@@ -70,7 +70,7 @@ func FromNet(ctx context.Context, gh *github.Client, meta versioning.DependencyM
 		return
 	}
 
-	err = method(path, dir, compiler.Paths)
+	_, err = method(path, dir, compiler.Paths)
 	if err != nil {
 		err = errors.Wrapf(err, "failed to unzip package %s", path)
 		return
@@ -89,9 +89,8 @@ func GetCompilerPackage(ctx context.Context, gh *github.Client, version types.Co
 	}
 
 	if meta.Tag == "" {
-		meta.Tag = "3.10.4"
-	}
-	if meta.Tag[0] != 'v' {
+		meta.Tag = "v3.10.4"
+	} else if meta.Tag[0] != 'v' {
 		meta.Tag = "v" + meta.Tag
 	}
 
@@ -125,4 +124,10 @@ func GetCompilerPackageInfo(cacheDir, platform string) (compiler types.Compiler,
 		err = errors.Errorf("no compiler for platform '%s'", platform)
 	}
 	return
+}
+
+// GetCompilerFilename returns the path to a compiler given its platform and
+// version number.
+func GetCompilerFilename(version, platform, method string) string {
+	return fmt.Sprintf("pawn-%s-%s.%s", version, platform, method)
 }

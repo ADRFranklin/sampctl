@@ -152,7 +152,11 @@ func PrepareCommand(ctx context.Context, gh *github.Client, execDir, cacheDir, p
 
 	for name, value := range config.Constants {
 		if strings.HasPrefix(value, "$") {
-			args = append(args, fmt.Sprintf("%s=%s", name, os.Getenv(value[1:])))
+			variable := os.Getenv(value[1:])
+			if variable == "" {
+				print.Warn("Build constant", value, "refers to an unset environment variable")
+			}
+			args = append(args, fmt.Sprintf("%s=%s", name, variable))
 		} else {
 			args = append(args, fmt.Sprintf("%s=%s", name, value))
 		}
@@ -246,7 +250,7 @@ func CompileWithCommand(cmd *exec.Cmd, workingDir, errorDir string, relative boo
 		close(resultChan)
 	}()
 
-	print.Verb("executing compiler in", workingDir, "as", cmd.Args)
+	print.Verb("executing compiler in", workingDir, "as", cmd.Env, cmd.Args)
 	cmdError := cmd.Run()
 
 	err = outputWriter.Close()
@@ -255,15 +259,20 @@ func CompileWithCommand(cmd *exec.Cmd, workingDir, errorDir string, relative boo
 	}
 
 	if cmdError != nil {
-		if cmdError.Error() == "signal: killed" || cmdError.Error() == "context canceled" {
-			err = cmdError
-			return
-		} else if cmdError.Error() != "exit status 1" {
+		if !strings.HasPrefix(cmdError.Error(), "exit status") {
 			// if the failure was not caused by a simple compile error
 			print.Erro("Failed to execute compiler")
 			print.Erro("if you're on a 64 bit system this may be because the system is not set up to execute 32 bit binaries")
 			print.Erro("please enable this by allowing i386 packages and/or installing g++-multilib")
 			err = errors.Wrap(cmdError, "failed to execute compiler")
+			return
+		} else if cmdError.Error() == "exit status 1" {
+			// compilation failed with errors and warnings
+			err = nil
+		} else {
+			// if cmdError.Error() == "signal: killed" || cmdError.Error() == "context canceled"
+			err = cmdError
+			return
 		}
 	}
 

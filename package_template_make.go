@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/pkg/errors"
+	"gopkg.in/segmentio/analytics-go.v3"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Southclaws/sampctl/download"
@@ -23,6 +23,10 @@ var packageTemplateMakeFlags = []cli.Flag{
 		Value: ".",
 		Usage: "working directory for the package - by default, uses the current directory",
 	},
+	cli.BoolFlag{
+		Name:  "update",
+		Usage: "update cached dependencies to latest version",
+	},
 }
 
 func packageTemplateMake(c *cli.Context) (err error) {
@@ -30,7 +34,15 @@ func packageTemplateMake(c *cli.Context) (err error) {
 		print.SetVerbose()
 	}
 
+	if config.Metrics {
+		segment.Enqueue(analytics.Track{
+			Event:  "package template make",
+			UserId: config.UserID,
+		})
+	}
+
 	dir := util.FullPath(c.String("dir"))
+	forceUpdate := c.Bool("update")
 
 	if len(c.Args()) != 1 {
 		cli.ShowCommandHelpAndExit(c, "make", 0)
@@ -43,7 +55,7 @@ func packageTemplateMake(c *cli.Context) (err error) {
 	}
 	name := c.Args().First()
 
-	pkg, err := rook.PackageFromDir(true, dir, runtime.GOOS, "")
+	pcx, err := rook.NewPackageContext(gh, gitAuth, true, dir, platform(c), cacheDir, "")
 	if err != nil {
 		return
 	}
@@ -58,13 +70,13 @@ func packageTemplateMake(c *cli.Context) (err error) {
 		return errors.Wrapf(err, "failed to create template directory at '%s'", templatePath)
 	}
 
-	pkg.Local = templatePath
-	pkg.Vendor = filepath.Join(templatePath, "dependencies")
-	pkg.Repo = name
-	pkg.Entry = "tmpl.pwn"
-	pkg.Output = "tmpl.amx"
+	pcx.Package.LocalPath = templatePath
+	pcx.Package.Vendor = filepath.Join(templatePath, "dependencies")
+	pcx.Package.Repo = name
+	pcx.Package.Entry = "tmpl.pwn"
+	pcx.Package.Output = "tmpl.amx"
 
-	err = pkg.WriteDefinition()
+	err = pcx.Package.WriteDefinition()
 	if err != nil {
 		return errors.Wrap(err, "failed to write package template definition file")
 	}
@@ -72,7 +84,7 @@ func packageTemplateMake(c *cli.Context) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 
-	err = rook.EnsureDependencies(ctx, gh, &pkg, gitAuth, runtime.GOOS, cacheDir)
+	err = pcx.EnsureDependencies(ctx, forceUpdate)
 	if err != nil {
 		return errors.Wrap(err, "failed to ensure dependencies of template package")
 	}
