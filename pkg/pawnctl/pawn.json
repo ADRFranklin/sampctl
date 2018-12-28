@@ -1,0 +1,7 @@
+{
+    "user": "Southclaws",
+    "repo": "temp",
+    "dependencies": [
+        "sampctl/samp-stdlib"
+    ]
+}
